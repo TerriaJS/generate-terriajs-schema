@@ -204,6 +204,45 @@ function unarray(arr) {
     return arr.length === 1 ? arr[0] : arr;
 }
 
+function specialProps(propName, p, className) {
+    function clone(o) {
+        return JSON.parse(JSON.stringify(o));
+    }
+    var specials = {
+        'rectangle': {
+            type: 'array',
+            items: { 
+                type: [ 'number', 'string' ]
+            },
+            format: 'table',
+            options:  {
+                collapsed: true,
+                disable_array_reorder: true
+            },
+            maxItems: 4,
+            minItems: 2
+        },
+        'blacklist': {
+            additionalProperties: {
+                type: 'boolean',
+                format: 'checkbox'
+            }
+        },
+        'whitelist': {
+            additionalProperties: {
+                type: 'boolean',
+                format: 'checkbox'
+            }
+        }
+    };
+    if (specials[propName]) {
+        Object.keys(specials[propName]).forEach(function(k) {
+            p[k] = clone(specials[propName][k]);
+        });
+    }
+    return p;
+}
+
 function process(model, comments) {
     //console.log(comments.filter(function(x) { return x.kind === 'constructor';}));
 
@@ -260,28 +299,7 @@ function process(model, comments) {
             p.options = { expand_height: true };
         }
 
-        if (x.name === 'rectangle') {
-            p.type = 'array';
-            p.items = { 
-                type: [ 'number', 'string' ]
-            };
-            p.format = 'table';
-            p.options =  {
-                collapsed: true,
-                disable_array_reorder: true
-            };
-            p.maxItems = 4;
-            p.minItems = 2;
-        }
-
-        // blacklist/whitelist is a special format where items are object properties
-        if (x.name.match (/^(black|white)list$/i)) {
-            p.additionalProperties = {
-                type: 'boolean',
-                format: 'checkbox'
-            };
-        }
-
+        p = specialProps(x.name, p, className);
         out.properties[x.name] = p;
     });
     // This is fundamental to how the editor works. It's a bit of JSON-Schema magic that forces the editor to pick the right schema once the user selects a type.
