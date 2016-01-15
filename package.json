@@ -1,0 +1,16 @@
+{
+  "name": "generate-datasourceeditor",
+  "version": "1.0.0",
+  "description": "Generates JSON schema files from TerriaJS source, used by DataSourceEditor (based on JSONEditor)",
+  "main": "main.js",
+  "dependencies": {
+    "esprima": "^2.7.1",
+    "jsdoc-parse": "^1.2.6"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "Apache-2.0"
+}
