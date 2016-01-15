@@ -7,7 +7,7 @@
  * @type
  * @editortype (uses @type if not present)
  * @editordescription
- * @editorformat (customising the choice of editor, eg "tabs", "table", "checkbox"
+ * @editorformat (customising the choice of editor, eg "tabs", "table", "checkbox")
  * @editoritemstype (type of each thing in the array. Generally better to use @type {Number[]} where possible.
  * @editoritemstitle (name of each thing in the array, like "Filter")
  * @editoritemsdescription (description of each thing in the array)
@@ -60,8 +60,7 @@ function titleify(propName) {
 
 // return an esprima parse tree from a file.
 function parseCode(filename) {
-    return esprima.parse(fs.readFileSync(filename, 'utf8')); /*, { attachComment: true }*/
- 
+    return esprima.parse(fs.readFileSync(filename, 'utf8'));
 }
 
 // allows x.filter(eq('a.b.c', 3))
@@ -210,7 +209,7 @@ function process(model, comments) {
 
     var className = comments.filter(eq('kind', 'class'))[0].name;
 
-    // generate JSON schema for the class-level parameters
+    /*** Generate JSON schema for the class-level parameters ***/
     var out = {
         type: 'object',
         defaultProperties: [
@@ -237,9 +236,8 @@ function process(model, comments) {
 
     var props = getClassProps(comments, className, model.inheritsLine);
 
-    // generate JSON schema for each of the class properties.
+    /*** Generate JSON schema for each of the class properties. ***/
     props.forEach(function(x) {
-        //console.log(x.type);
         var p = {
             type: unarray(x.type.filter(supportedType).map(editorType)),
             title: '#' + getTag(x, 'editortitle', titleify(x.name)),
@@ -257,6 +255,11 @@ function process(model, comments) {
             p.format = 'textarea';
         }
 
+        p.format = getTag(x, 'editorformat', p.format);
+        if (p.format === 'textarea') {
+            p.options = { expand_height: true };
+        }
+
         if (x.name === 'rectangle') {
             p.type = 'array';
             p.items = { 
@@ -271,10 +274,6 @@ function process(model, comments) {
             p.minItems = 2;
         }
 
-        p.format = getTag(x, 'editorformat', p.format);
-        if (p.format === 'textarea') {
-            p.options = { expand_height: true };
-        }
         // blacklist/whitelist is a special format where items are object properties
         if (x.name.match (/^(black|white)list$/i)) {
             p.additionalProperties = {
@@ -286,7 +285,7 @@ function process(model, comments) {
         out.properties[x.name] = p;
     });
     // This is fundamental to how the editor works. It's a bit of JSON-Schema magic that forces the editor to pick the right schema once the user selects a type.
-    if (defined(model.typeId) && model.typeId !== 'group' /* TODO how to handle groups? Can't have two conflicting types for inherited models */) {
+    if (defined(model.typeId) && model.typeId !== 'group' /* Groups are handled through handcoded wrapper file, 'JustCatalogGroup.json' */) {
         out.properties.type = {
             type: 'string',
             'enum': [ model.typeId ],
@@ -322,8 +321,8 @@ function writeItemsFile(models) {
 }
 
 var catalogModels = fs.readdirSync('../terriajs-editormarkup/lib/Models').filter(function(f) { 
-        return f.match(/Catalog(Item|Group|Member)\.js$/) && 
-              !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/); 
+        return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+              !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);  // a deprecated shim
     }).map(function(f) {
         return {
             name: f.replace(/\.js$/, ''),
@@ -342,9 +341,7 @@ catalogModels.forEach(function(model) {
         // strip out any model that doesn't have a concrete static .type.
         // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
         console.log ('(' + model.name + ' has no type ID)');
-        //return;
     }
-    //console.log(model.name + ' (' + model.typeId + ')');
     try {
         var doc = jsdoc({src: model.filename}); // 2. with JSdoc
         var m = findInherits(model.filename); // 3. manually 
