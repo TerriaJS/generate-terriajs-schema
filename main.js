@@ -99,11 +99,9 @@ function supportedType(type) {
 
 // For consistent behaviour, '@editortype' is expressed as if it were '@type', and we process it into a JSDoc internal type.
 function fromEditorTypes(types) {
-    console.log(types);
     // Support either '{Number} this is ignored' or 'Number' formats.
     var found = types.match(/(\{(.*)\})?(.*)/);
     return defaultValue(found[2], found[3]).split('|').map(function(type) {
-        console.log(type);
         if (type === 'Number[]')
             return 'Array.<Number>';
         else if (type === 'String[]')
