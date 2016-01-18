@@ -17,7 +17,7 @@
     },
     "catalog": {
       "title": "Catalog",
-      "$ref": "/items.json",
+      "$ref": "items.json",
       "format": "",
       "items": {
         "title": "Top-level group"
