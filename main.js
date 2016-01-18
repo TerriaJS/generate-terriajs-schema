@@ -330,7 +330,7 @@ function writeItemsFile(models) {
             headerTemplate: '{{ self.name }}',
             allOf: [ { $ref: 'CatalogMember.json' }],
             required: [ 'name', 'type' ],
-            oneOf: [{$ref: 'manual/JustCatalogGroup.json'}].concat(models.map(function(m) {
+            oneOf: [{$ref: 'JustCatalogGroup.json'}].concat(models.map(function(m) {
                 return { $ref: m.name + '.json' };
             }))
         }
@@ -385,4 +385,19 @@ catalogModels.forEach(function(model) {
         console.log(e);
         done++; // danger if the last time fails.
     }
+});
+
+// copy contents of 'manual' to 'out'
+fs.readdir('manual', function(err, files) {
+    files.forEach(function(file) {
+        fs.readFile('manual/' + file, 'utf8', function(err, data) {
+            fs.writeFile('out/' + file, data, 'utf8', function(err) {
+                if (!err) {
+                    console.log('Copied ' + file);
+                } else {
+                    throw(err);
+                }
+            });
+        });
+    });
 });

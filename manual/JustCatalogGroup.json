@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "CatalogMember.json"
+    },
+    {
+      "$ref": "CatalogGroup.json"
+    }
+  ],
+  "title": "Catalog group",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "group"
+      ],
+      "options": { "hidden": true }
+    },
+    "items": {
+      "$ref": "items.json"
+    }    
+  }
+}

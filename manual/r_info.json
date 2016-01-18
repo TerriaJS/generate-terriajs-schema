@@ -1,0 +1,34 @@
+{
+  "type": "array",
+  "title": "Information metadata",
+  "format": "tabs",
+  "description": "Gets or sets the array of section titles and contents for display in the layer info panel.\n    In future this may replace 'description' above - this list should not contain\n    sections named 'description' or 'Description' if the 'description' property\n    is also set as both will be displayed.\n    Content will be rendered as Markdown with HTML.",
+  "items": {
+    "type": "object",
+    "title": "Info",
+    "headerTemplate": "{{ self.name }}",
+    "defaultProperties": [
+      "name",
+      "content"
+    ],
+    "required": [
+      "name",
+      "content"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "title": "Section name",
+        "type": "string"
+      },
+      "content": {
+        "title": "Content",
+        "type": "string",
+        "format": "textarea",
+        "options": {
+          "expand_height": true
+        }
+      }
+    }
+  }
+}
