@@ -5,7 +5,7 @@
  *
  * These property-level tags are supported:
  * @type
- * @editortype (uses @type if not present)
+ * @editortype (in same format as @type, uses @type if not present)
  * @editordescription
  * @editorformat (customising the choice of editor, eg "tabs", "table", "checkbox")
  * @editoritemstype (type of each thing in the array. Generally better to use @type {Number[]} where possible.
@@ -97,10 +97,12 @@ function supportedType(type) {
     return !!type.match(/^(Boolean|Number|String|Object|LegendUrl|Array(\.<(String|Number|Object|GetFeatureInfoFormat)>)?)$/i);
 }
 
-// Weirdly it's easier if we convert '@editortype Number[]|String[]' back into JSdoc format.
+// For consistent behaviour, '@editortype' is expressed as if it were '@type', and we process it into a JSDoc internal type.
 function fromEditorTypes(types) {
     console.log(types);
-    return types.replace(/[{} ]/g,'').split('|').map(function(type) {
+    // Support either '{Number} this is ignored' or 'Number' formats.
+    var found = types.match(/(\{(.*)\})?(.*)/);
+    return defaultValue(found[2], found[3]).split('|').map(function(type) {
         console.log(type);
         if (type === 'Number[]')
             return 'Array.<Number>';
