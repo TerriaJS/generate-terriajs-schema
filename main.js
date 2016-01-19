@@ -424,11 +424,11 @@ fs.readdir(argv.source + '/lib/Models', function(err, files) {
     });
 });
 
-// copy contents of 'manual' to 'out'
-fs.readdir(path.join(__dirname, 'manual'), function(err, files) {
+// copy hardcoded JSON files
+fs.readdir(path.join(__dirname, 'src'), function(err, files) {
     files.forEach(function(file) {
-        fs.readFile(path.join(__dirname, 'manual', file), 'utf8', function(err, data) {
-            fs.writeFile(argv.dest + '/' + file, data, 'utf8', function(err) {
+        fs.readFile(path.join(__dirname, 'src', file), 'utf8', function(err, data) {
+            fs.writeFile(path.join(argv.dest, file), data, 'utf8', function(err) {
                 if (!err) {
                     console.log('Copied ' + file);
                 } else {
