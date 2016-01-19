@@ -6,6 +6,17 @@ var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse');
 
+var argv = require('yargs')
+    .describe('source','TerriaJS directory to scan.')
+    .default('source', '../terriajs')
+    .describe('minify', 'Generate minified JSON')
+    .describe('dest', 'Output directory')
+    .default('dest', './out')
+    .help('help')
+    .argv;
+var jsonIndent = (argv.minify ? 0 : 2);
+argv.source = '../terriajs-editormarkup';
+console.log(JSON.stringify(argv));
 function defined(x) {
     return x !== undefined;
 }
@@ -303,8 +314,8 @@ function process(model, comments) {
     delete (out.properties.typeName);
     
     console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
-    model.outFile = 'out/' + model.name + '.json';
     fs.writeFileSync(model.outFile, JSON.stringify(out, null, 2), 'utf8');
+    model.outFile = argv.dest + '/' + model.name + '.json';
 }
 
 function writeItemsFile(models) {
