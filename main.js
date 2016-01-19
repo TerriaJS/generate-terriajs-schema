@@ -7,14 +7,31 @@ var esprima = require('esprima'),
     jsdoc = require('jsdoc-parse');
 
 var argv = require('yargs')
+    .usage ('$0 [options] --source <dir> --dest <dir>')
     .describe('source','TerriaJS directory to scan.')
     .default('source', '../terriajs')
     .describe('minify', 'Generate minified JSON')
     .describe('dest', 'Output directory')
     .default('dest', './out')
+    .describe('versionsubdir', 'Add TerriaJS version as subdirectory.')
+    .boolean('versionsubdir')
     .help('help')
     .argv;
 var jsonIndent = (argv.minify ? 0 : 2);
+
+if (argv.versionsubdir) {
+    try  {
+        console.log(argv.versionsubdir);
+        argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
+        console.log('Writing to: ' + argv.dest);
+    } catch (e) {
+        console.error(e.message);
+        console.error("Couldn't access TerriaJS at " + argv.source);
+        process.exit(1);
+    }
+}
+
+
 
 function defined(x) {
     return x !== undefined;
@@ -242,7 +259,7 @@ function specialProps(propName, p, className) {
     return p;
 }
 
-function process(model, comments) {
+function processText(model, comments) {
     //console.log(comments.filter(function(x) { return x.kind === 'constructor';}));
 
     var className = comments.filter(eq('kind', 'class'))[0].name;
@@ -367,7 +384,7 @@ function processModel(model, callback) {
             });
 
             doc.on('end', function() { 
-                process(model, JSON.parse(model.allText)); 
+                processText(model, JSON.parse(model.allText)); 
                 callback(undefined, model);
             });
         } catch (e) {
