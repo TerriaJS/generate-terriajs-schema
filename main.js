@@ -2,26 +2,26 @@
 TODO:
 - command line arguments:  generate.js --minify --source=../terriajs --dest=out/
  */
+
 var esprima = require('esprima'),
     fs = require('fs'),
-    jsdoc = require('jsdoc-parse');
-
+    jsdoc = require('jsdoc-parse'),
+    path = require('path');
 var argv = require('yargs')
     .usage ('$0 [options] --source <dir> --dest <dir>')
     .describe('source','TerriaJS directory to scan.')
     .default('source', '../terriajs')
     .describe('minify', 'Generate minified JSON')
     .describe('dest', 'Output directory')
-    .default('dest', './out')
-    .describe('versionsubdir', 'Add TerriaJS version as subdirectory.')
-    .boolean('versionsubdir')
+    .default('dest', './schema')
+    .describe('noversionsubdir', 'Don\'t add TerriaJS version as subdirectory.')
+    .boolean('noversionsubdir')
     .help('help')
     .argv;
 var jsonIndent = (argv.minify ? 0 : 2);
 
-if (argv.versionsubdir) {
+if (!argv.noversionsubdir) {
     try  {
-        console.log(argv.versionsubdir);
         argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
         console.log('Writing to: ' + argv.dest);
     } catch (e) {
@@ -425,9 +425,9 @@ fs.readdir(argv.source + '/lib/Models', function(err, files) {
 });
 
 // copy contents of 'manual' to 'out'
-fs.readdir('manual', function(err, files) {
+fs.readdir(path.join(__dirname, 'manual'), function(err, files) {
     files.forEach(function(file) {
-        fs.readFile('manual/' + file, 'utf8', function(err, data) {
+        fs.readFile(path.join(__dirname, 'manual', file), 'utf8', function(err, data) {
             fs.writeFile(argv.dest + '/' + file, data, 'utf8', function(err) {
                 if (!err) {
                     console.log('Copied ' + file);
