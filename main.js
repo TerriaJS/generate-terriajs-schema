@@ -15,8 +15,7 @@ var argv = require('yargs')
     .help('help')
     .argv;
 var jsonIndent = (argv.minify ? 0 : 2);
-argv.source = '../terriajs-editormarkup';
-console.log(JSON.stringify(argv));
+
 function defined(x) {
     return x !== undefined;
 }
