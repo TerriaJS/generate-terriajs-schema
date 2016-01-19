@@ -5,7 +5,8 @@
   "main": "main.js",
   "dependencies": {
     "esprima": "^2.7.1",
-    "jsdoc-parse": "^1.2.6"
+    "jsdoc-parse": "^1.2.6",
+    "yargs": "^3.32.0"
   },
   "devDependencies": {},
   "scripts": {

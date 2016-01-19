@@ -39,7 +39,7 @@ function getTag(item, tag, fallback) {
     }
 }
 
-// 'myPropName' -> 'My prop name'
+// 'myWmsPropName' -> 'My WMS prop name'
 function titleify(propName) {
     var s = propName[0].toUpperCase();
     for (var i = 1; i < propName.length; i++) {
@@ -148,7 +148,8 @@ function editorArrayItems(prop) {
 }
 
 // Search the whole input file just to find the line where the class inherits from CatalogItem/CatalogGroup.
-function findInherits(filename) {
+// Takes a function(err, result) callback.
+function findInherits(fulltext, filename) {
 
     var searchRE = /inherit\s*\(([A-Za-z0-9_-]+).*Catalog/;
     if (filename.match(/CatalogMember\.js/)) {
@@ -156,7 +157,6 @@ function findInherits(filename) {
         searchRE = /defineProperties\(CatalogMember\.prototype/;
     }
 
-    var fulltext = fs.readFileSync(filename).toString();
     var lines = fulltext.split('\n');
 
     for (var i = 0; i < lines.length; i++) {
@@ -314,10 +314,19 @@ function process(model, comments) {
     delete (out.properties.typeName);
     
     console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
-    fs.writeFileSync(model.outFile, JSON.stringify(out, null, 2), 'utf8');
     model.outFile = argv.dest + '/' + model.name + '.json';
+    fs.writeFile(model.outFile, JSON.stringify(out, null, jsonIndent), 'utf8', showError);
 }
 
+function showError(err) {
+    if (!err) { 
+        return;
+    }
+    console.error(JSON.stringify(err));
+}
+
+// Write out the special 'items' schema that says that each item in group can be any of the item types
+// that we've processed today.
 function writeItemsFile(models) {
     itemsOut = {
         title: 'Items',
@@ -335,63 +344,75 @@ function writeItemsFile(models) {
             }))
         }
     };
-    fs.writeFileSync('out/items.json', JSON.stringify(itemsOut, null, 2), 'utf8');
+    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, jsonIndent), 'utf8', showError);
 }
 
-var catalogModels = fs.readdirSync('../terriajs-editormarkup/lib/Models').filter(function(f) { 
+function processModel(model, callback) {
+    fs.readFile(model.filename, 'utf8', function(err, data ){
+        model.source = esprima.parse(data); // 1. Parse with esprima
+        model.typeId = getTypeProp(model.source, 'type'); 
+        if (!defined(model.typeId)) {
+            // strip out any model that doesn't have a concrete static .type.
+            // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
+            console.log ('(' + model.name + ' has no type ID)');
+        }
+        try {
+            var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
+            m = findInherits(data, model.filename); // 3. simple text scan
+            model.inheritsLine = m.line;
+            model.parent = m.parent; 
+            model.allText = '';
+            model.typeName = getTypeProp(model.source, 'typeName');
+            doc.on('data', function(chunk) {
+                model.allText += chunk;
+            });
+
+            doc.on('end', function() { 
+                process(model, JSON.parse(model.allText)); 
+                callback(undefined, model);
+            });
+        } catch (e) {
+            callback(e, model);
+        }        
+    });
+}
+try {
+    fs.mkdirSync(argv.dest);
+} catch (e) {
+    if (e.code !== 'EEXIST') {
+        throw(e);
+    }
+}
+
+fs.readdir(argv.source + '/lib/Models', function(err, files) {
+    var models=[];
+    var processedModels = 0;
+    files.filter(function(f) { 
         return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
               !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);  // a deprecated shim
-    }).map(function(f) {
-        return {
+    }).forEach(function(f, i, arr) {
+        processModel({
             name: f.replace(/\.js$/, ''),
-            filename: '../terriajs-editormarkup/lib/Models/' + f
-        };
-    });
-
-var done = 0;
-var models = [];
-
-catalogModels.forEach(function(model) {
-    // For efficiency, let's load and parse each file three times.
-    model.source = parseCode(model.filename); // 1. using esprima
-    model.typeId = getTypeProp(model.source, 'type'); 
-    if (!defined(model.typeId)) {
-        // strip out any model that doesn't have a concrete static .type.
-        // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
-        console.log ('(' + model.name + ' has no type ID)');
-    }
-    try {
-        var doc = jsdoc({src: model.filename}); // 2. with JSdoc
-        var m = findInherits(model.filename); // 3. manually 
-        model.inheritsLine = m.line;
-        model.parent = m.parent; 
-        model.allText = '';
-        model.typeName = getTypeProp(model.source, 'typeName');
-        doc.on('data', function(chunk) {
-            model.allText += chunk;
-        });
-
-        doc.on('end', function() { 
-            process(model, JSON.parse(model.allText)); 
-            if (defined(model.typeId) && model.typeId !== 'group') {
+            filename: argv.source + '/lib/Models/' + f
+        }, function(err, model) {
+            if (err) {
+                console.log('Fail: ' + model.filename);
+                console.log(err);
+            } else if (defined(model.typeId) && model.typeId !== 'group') {
                 models.push(model);
             }
-            if (++done === catalogModels.length) {
+            if (++processedModels === arr.length) {
                 writeItemsFile(models);
             }
         });
-    } catch (e) {
-        console.log('Fail: ' + model.filename);
-        console.log(e);
-        done++; // danger if the last time fails.
-    }
+    });
 });
 
 // copy contents of 'manual' to 'out'
 fs.readdir('manual', function(err, files) {
     files.forEach(function(file) {
         fs.readFile('manual/' + file, 'utf8', function(err, data) {
-            fs.writeFile('out/' + file, data, 'utf8', function(err) {
+            fs.writeFile(argv.dest + '/' + file, data, 'utf8', function(err) {
                 if (!err) {
                     console.log('Copied ' + file);
                 } else {
