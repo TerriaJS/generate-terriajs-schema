@@ -1,18 +1,7 @@
-/**
- * These class-level tags are supported:
- * @editortitle (uses class name, munged, if not present)
- * @editordescription (uses JSdoc description, if not present)
- *
- * These property-level tags are supported:
- * @type
- * @editortype (in same format as @type, uses @type if not present)
- * @editordescription
- * @editorformat (customising the choice of editor, eg "tabs", "table", "checkbox")
- * @editoritemstype (type of each thing in the array. Generally better to use @type {Number[]} where possible.
- * @editoritemstitle (name of each thing in the array, like "Filter")
- * @editoritemsdescription (description of each thing in the array)
- */ 
-
+/*
+TODO:
+- command line arguments:  generate.js --minify --source=../terriajs --dest=out/
+ */
 var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse');
