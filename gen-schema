@@ -6,6 +6,8 @@ var yargs = require('yargs')
     .describe('minify', 'Generate minified JSON')
     .describe('dest', 'Output directory')
     .default('dest', './schema')
+    .describe('quiet', 'Suppress non-error output.')
+    .boolean('quiet')
     .describe('noversionsubdir', 'Don\'t add TerriaJS version as subdirectory.')
     .boolean('noversionsubdir')
     .help('help');
@@ -15,7 +17,7 @@ argv.jsonIndent = (argv.minify ? 0 : 2);
 if (!argv.noversionsubdir) {
     try  {
         argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
-        console.log('Writing to: ' + argv.dest);
+        console.log('Writing TerriaJS schema to: ' + argv.dest);
     } catch (e) {
         console.error("Couldn't access TerriaJS at " + argv.source + ". (" + e.message + ")");
         process.exit(1);

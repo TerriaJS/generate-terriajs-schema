@@ -1,3 +1,4 @@
+/*jshint -W030 */
 var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse'),
@@ -75,7 +76,6 @@ function getTypeProp(source, typeProp) {
             .value.properties[0].value.body.body[0].argument.value;                     // ........... return 'thebitwewant';
         return r;
     } catch (e) {
-        //console.log('---');
         return undefined; // if there's no such statement, it's probably not a real CatalogItem type.
     }
 }
@@ -127,8 +127,9 @@ function editorArrayItems(prop) {
     items.type = getTag(prop, 'editoritemstype', type);
     items.title = getTag(prop, 'editoritemstitle');
     items.description = getTag(prop, 'editoritemsdescription');
-    if (items.title) 
+    if (!argv.quiet && items.title) {
         console.log(items.title);
+    }
     if (prop.type === 'Array.<GetFeatureInfoFormat>') {
         items.enum = [ 'json', 'xml', 'html', 'text' ];
     }
@@ -232,8 +233,6 @@ function specialProps(propName, p, className) {
 }
 
 function processText(model, comments) {
-    //console.log(comments.filter(function(x) { return x.kind === 'constructor';}));
-
     var className = comments.filter(eq('kind', 'class'))[0].name;
 
     /*** Generate JSON schema for the class-level parameters ***/
@@ -301,7 +300,7 @@ function processText(model, comments) {
 
     delete (out.properties.typeName);
     
-    console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
+    !argv.quiet && console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
     model.outFile = argv.dest + '/' + model.name + '.json';
     fs.writeFile(model.outFile, JSON.stringify(out, null, argv.jsonIndent), 'utf8', showError);
 }
@@ -315,7 +314,7 @@ function showError(err) {
 
 // Write out the special 'items' schema that says that each item in group can be any of the item types
 // that we've processed today.
-function writeItemsFile(models) {
+function writeItemsFile(models, callback) {
     itemsOut = {
         title: 'Items',
         description: 'List of items or groups',
@@ -332,7 +331,7 @@ function writeItemsFile(models) {
             }))
         }
     };
-    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, argv.jsonIndent), 'utf8', showError);
+    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, argv.jsonIndent), 'utf8', callback);
 }
 
 function processModel(model, callback) {
@@ -342,7 +341,7 @@ function processModel(model, callback) {
         if (!defined(model.typeId)) {
             // strip out any model that doesn't have a concrete static .type.
             // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
-            console.log ('(' + model.name + ' has no type ID)');
+            !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
         }
         try {
             var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
@@ -407,13 +406,16 @@ module.exports = function(options) {
                 filename: argv.source + '/lib/Models/' + f
             }, function(err, model) {
                 if (err) {
-                    console.log('Fail: ' + model.filename);
-                    console.log(err);
+                    console.error('Fail: ' + model.filename);
+                    console.error(err);
                 } else if (defined(model.typeId) && model.typeId !== 'group') {
                     models.push(model);
                 }
                 if (++processedModels === arr.length) {
-                    writeItemsFile(models);
+                    writeItemsFile(models, function(err) {
+                        showError(err);
+                        console.log('Schema writing finished.');
+                    });
                 }
             });
         });
@@ -425,7 +427,7 @@ module.exports = function(options) {
             fs.readFile(path.join(__dirname, 'src', file), 'utf8', function(err, data) {
                 fs.writeFile(path.join(argv.dest, file), data, 'utf8', function(err) {
                     if (!err) {
-                        console.log('Copied ' + file);
+                        !argv.quiet && console.log('Copied ' + file);
                     } else {
                         throw(err);
                     }
