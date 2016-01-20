@@ -1,6 +1,6 @@
 {
   "name": "generate-terriajs-schema",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Generates JSON schema files from TerriaJS source, used by DataSourceEditor (based on JSONEditor)",
   "main": "main.js",
   "repository": "https://github.com/TerriaJS/generate-terriajs-schema",
@@ -13,5 +13,7 @@
   "scripts": {},
   "author": "Data61",
   "license": "Apache-2.0",
-  "bin": { "generate": "./generate" }
+  "bin": {
+    "generate": "./generate"
+  }
 }
