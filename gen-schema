@@ -17,8 +17,7 @@ if (!argv.noversionsubdir) {
         argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
         console.log('Writing to: ' + argv.dest);
     } catch (e) {
-        console.error(e.message);
-        console.error("Couldn't access TerriaJS at " + argv.source);
+        console.error("Couldn't access TerriaJS at " + argv.source + ". (" + e.message + ")");
         process.exit(1);
     }
 }

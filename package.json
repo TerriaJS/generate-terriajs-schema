@@ -12,8 +12,9 @@
   "devDependencies": {},
   "scripts": {},
   "author": "Data61",
+  "contributors": [ "Steve Bennett <me@stevebennett.me> (http://stevebennett.me)" ],
   "license": "Apache-2.0",
   "bin": {
-    "generate": "./generate"
+    "gen-schema": "./gen-schema"
   }
 }
