@@ -1,37 +1,9 @@
-/*
-TODO:
-- command line arguments:  generate.js --minify --source=../terriajs --dest=out/
- */
-
 var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse'),
     path = require('path');
-var argv = require('yargs')
-    .usage ('$0 [options] --source <dir> --dest <dir>')
-    .describe('source','TerriaJS directory to scan.')
-    .default('source', '../terriajs')
-    .describe('minify', 'Generate minified JSON')
-    .describe('dest', 'Output directory')
-    .default('dest', './schema')
-    .describe('noversionsubdir', 'Don\'t add TerriaJS version as subdirectory.')
-    .boolean('noversionsubdir')
-    .help('help')
-    .argv;
-var jsonIndent = (argv.minify ? 0 : 2);
 
-if (!argv.noversionsubdir) {
-    try  {
-        argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
-        console.log('Writing to: ' + argv.dest);
-    } catch (e) {
-        console.error(e.message);
-        console.error("Couldn't access TerriaJS at " + argv.source);
-        process.exit(1);
-    }
-}
-
-
+var argv;
 
 function defined(x) {
     return x !== undefined;
@@ -331,7 +303,7 @@ function processText(model, comments) {
     
     console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
     model.outFile = argv.dest + '/' + model.name + '.json';
-    fs.writeFile(model.outFile, JSON.stringify(out, null, jsonIndent), 'utf8', showError);
+    fs.writeFile(model.outFile, JSON.stringify(out, null, argv.jsonIndent), 'utf8', showError);
 }
 
 function showError(err) {
@@ -360,7 +332,7 @@ function writeItemsFile(models) {
             }))
         }
     };
-    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, jsonIndent), 'utf8', showError);
+    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, argv.jsonIndent), 'utf8', showError);
 }
 
 function processModel(model, callback) {
@@ -392,49 +364,73 @@ function processModel(model, callback) {
         }        
     });
 }
-try {
-    fs.mkdirSync(argv.dest);
-} catch (e) {
-    if (e.code !== 'EEXIST') {
-        throw(e);
+
+function makeDir(dir) {
+    try {
+        fs.mkdirSync(dir);
+    } catch (e) {
+        if (e.code === 'EEXIST') {
+            return;
+        }
+        if (e.code === 'ENOENT') {
+            console.error('Parent directory missing, so unable to create ' + dir);
+        } else {
+            console.error(e.message);
+        }
+        process.exit(1);
     }
 }
 
-fs.readdir(argv.source + '/lib/Models', function(err, files) {
-    var models=[];
-    var processedModels = 0;
-    files.filter(function(f) { 
-        return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
-              !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);  // a deprecated shim
-    }).forEach(function(f, i, arr) {
-        processModel({
-            name: f.replace(/\.js$/, ''),
-            filename: argv.source + '/lib/Models/' + f
-        }, function(err, model) {
-            if (err) {
-                console.log('Fail: ' + model.filename);
-                console.log(err);
-            } else if (defined(model.typeId) && model.typeId !== 'group') {
-                models.push(model);
-            }
-            if (++processedModels === arr.length) {
-                writeItemsFile(models);
-            }
-        });
-    });
-});
 
-// copy hardcoded JSON files
-fs.readdir(path.join(__dirname, 'src'), function(err, files) {
-    files.forEach(function(file) {
-        fs.readFile(path.join(__dirname, 'src', file), 'utf8', function(err, data) {
-            fs.writeFile(path.join(argv.dest, file), data, 'utf8', function(err) {
-                if (!err) {
-                    console.log('Copied ' + file);
-                } else {
-                    throw(err);
+/**
+ * Generate schema and write to files.
+ * @param  {Object} options Yargs-style object, including
+ * * source: source directory
+ * * dest: target directory
+ * @return {[type]}         [description]
+ */
+module.exports = function(options) {
+    argv = options;
+    if (!argv || !argv.source || !argv.dest) {
+        throw('Source and destination arguments required.');
+    }
+    makeDir(argv.dest);
+    fs.readdir(argv.source + '/lib/Models', function(err, files) {
+        var models=[];
+        var processedModels = 0;
+        files.filter(function(f) { 
+            return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+                  !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);  // a deprecated shim
+        }).forEach(function(f, i, arr) {
+            processModel({
+                name: f.replace(/\.js$/, ''),
+                filename: argv.source + '/lib/Models/' + f
+            }, function(err, model) {
+                if (err) {
+                    console.log('Fail: ' + model.filename);
+                    console.log(err);
+                } else if (defined(model.typeId) && model.typeId !== 'group') {
+                    models.push(model);
+                }
+                if (++processedModels === arr.length) {
+                    writeItemsFile(models);
                 }
             });
         });
     });
-});
+
+    // copy hardcoded JSON files
+    fs.readdir(path.join(__dirname, 'src'), function(err, files) {
+        files.forEach(function(file) {
+            fs.readFile(path.join(__dirname, 'src', file), 'utf8', function(err, data) {
+                fs.writeFile(path.join(argv.dest, file), data, 'utf8', function(err) {
+                    if (!err) {
+                        console.log('Copied ' + file);
+                    } else {
+                        throw(err);
+                    }
+                });
+            });
+        });
+    });
+};
