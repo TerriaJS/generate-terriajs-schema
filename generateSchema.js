@@ -239,7 +239,7 @@ function specialProps(propName, p, className) {
     return p;
 }
 
-function makeShellFile(model, mainOut) {
+function makeShellFile(model, mainOut, className, comments) {
     var out = {
         type: 'object',
         properties: {
@@ -250,9 +250,9 @@ function makeShellFile(model, mainOut) {
             }
 
         },
-        description: mainOut.description,
-        title: mainOut.title,
-               // it seems redundant to include the ancestors again here, but it's needed for the editor to function.
+        description: findClassProp(comments, className, 'editordescription', 'description'),
+        title: defaultValue(findClassProp(comments, className, 'editortitle'), model.typeName, className.replace(/Catalog(?!Member).*/, '')),
+        // it seems redundant to include the ancestors again here, but it's needed for the editor to function.
         allOf: mainOut.allOf.concat({ $ref: model.name + '.json' } )
     };
     if (model.name === 'CatalogGroup') {
@@ -276,9 +276,7 @@ function processText(model, comments) {
         defaultProperties: [
             'name', 'type', 'url' // do these always apply? Probably.
         ],
-        properties: {},
-        description: findClassProp(comments, className, 'editordescription', 'description'),
-        title: defaultValue(findClassProp(comments, className, 'editortitle'), model.typeName, className.replace(/Catalog.*/, ''))
+        properties: {}
     };
     if (model.name !== 'CatalogMember') { 
         out.allOf = [];
@@ -291,8 +289,6 @@ function processText(model, comments) {
             out.allOf.push({ $ref: model.parent + '.json' });
         }
         out.allOf.push({ $ref: 'CatalogMember.json' });
-    } else {
-        out.title = 'CatalogMember';
     }
     var props;
     try {
@@ -333,7 +329,7 @@ function processText(model, comments) {
     !argv.quiet && console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
     model.outFile = argv.dest + '/' + model.name + '.json';
     if (model.typeId) {
-        writeJson(argv.dest + '/' + model.name + '_type.json', makeShellFile(model, out), showError);
+        writeJson(argv.dest + '/' + model.name + '_type.json', makeShellFile(model, out, className, comments), showError);
     }
     model.description=undefined; //###testing
     model.title=undefined;
