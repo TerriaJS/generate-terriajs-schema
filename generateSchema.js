@@ -232,7 +232,7 @@ function specialProps(propName, p, className) {
     return p;
 }
 
-function processText(model, comments) {
+function processText(model, comments, editorMode) {
     var className = comments.filter(eq('kind', 'class'))[0].name;
 
     /*** Generate JSON schema for the class-level parameters ***/
@@ -266,7 +266,7 @@ function processText(model, comments) {
     props.forEach(function(x) {
         var p = {
             type: unarray(x.type.filter(supportedType).map(editorType)),
-            title: '#' + getTag(x, 'editortitle', titleify(x.name)),
+            title: getTag(x, 'editortitle', titleify(x.name)),
             description: getTag(x, 'editordescription', x.description
                 .replace(/^Gets or sets the/, 'The')
                 .replace(/^Gets or sets a/, 'A')
@@ -290,12 +290,14 @@ function processText(model, comments) {
         out.properties[x.name] = p;
     });
     // This is fundamental to how the editor works. It's a bit of JSON-Schema magic that forces the editor to pick the right schema once the user selects a type.
-    if (defined(model.typeId) && model.typeId !== 'group' /* Groups are handled through handcoded wrapper file, 'JustCatalogGroup.json' */) {
+    if (defined(model.typeId) && model.typeId !== 'group' /* ###Does this only apply in editor mode? */) {
         out.properties.type = {
-            type: 'string',
-            'enum': [ model.typeId ],
             options: { hidden: true }
         };
+        if (editorMode) { // otherwise this goes in items.json
+            out.properties.type.type = 'string'; // not strictly required
+            out.properties.type.enum =  [ model.typeId ]; 
+        }
     }
 
     delete (out.properties.typeName);
@@ -314,7 +316,35 @@ function showError(err) {
 
 // Write out the special 'items' schema that says that each item in group can be any of the item types
 // that we've processed today.
-function writeItemsFile(models, callback) {
+function writeItemsFile(models, callback, editorMode) {
+    function modelToItem(m) {
+        
+        // This seems convoluted, because it is. The logic is this:
+        // Every item, for every catalog type, either:
+        //   - a) does not have the type string; or
+        //   - b) has the type string, and meet all the other requirements
+        // We do it this way so that if an object fails part a), then any failure in part b) can instantly be flagged
+        // as a genuine validation failure and alerted with useful context.
+        typeProp = { 
+            type: {
+                enum: [ m.typeId ]
+            }
+        };
+        if (!editorMode) return {
+            oneOf: [
+                {
+                    not: { properties: typeProp }
+                },
+                { allOf: [ 
+                    // we have to put the type here (and not in the relevant schema file) in order to handle catalog types
+                    // that inherit from other types. Eg, abs-itt inherits from csv, but a type field can't be both csv and abs-itt.
+                    { properties: typeProp }, 
+                    { $ref: m.name + '.json' } 
+                ] }
+            ]
+        }; else 
+            return { $ref: m.name + '.json' };
+    }
     itemsOut = {
         title: 'Items',
         description: 'List of items or groups',
@@ -324,17 +354,19 @@ function writeItemsFile(models, callback) {
             type: 'object',
             title: 'item',
             headerTemplate: '{{ self.name }}',
-            allOf: [ { $ref: 'CatalogMember.json' }],
-            required: [ 'name', 'type' ],
-            oneOf: [{$ref: 'JustCatalogGroup.json'}].concat(models.map(function(m) {
-                return { $ref: m.name + '.json' };
-            }))
+            required: [ 'name', 'type' ]
         }
     };
+    if (editorMode) {
+        itemsOut.items.allOf = [{ $ref: 'CatalogMember.json' }];
+        itemsOut.items.oneOf = [modelToItem({name: 'JustCatalogGroup', typeId: 'group'})].concat(models.map(modelToItem));
+    } else {
+        itemsOut.items.allOf = [ { $ref: 'CatalogMember.json' }, modelToItem({name: 'JustCatalogGroup', typeId: 'group'})].concat(models.map(modelToItem));
+    }
     fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, argv.jsonIndent), 'utf8', callback);
 }
 
-function processModel(model, callback) {
+function processModel(model, callback, editorMode) {
     fs.readFile(model.filename, 'utf8', function(err, data ){
         model.source = esprima.parse(data); // 1. Parse with esprima
         model.typeId = getTypeProp(model.source, 'type'); 
@@ -355,7 +387,7 @@ function processModel(model, callback) {
             });
 
             doc.on('end', function() { 
-                processText(model, JSON.parse(model.allText)); 
+                processText(model, JSON.parse(model.allText), editorMode); 
                 callback(undefined, model);
             });
         } catch (e) {
@@ -389,6 +421,7 @@ function makeDir(dir) {
  * @return {[type]}         [description]
  */
 module.exports = function(options) {
+    editorMode=true;
     argv = options;
     if (!argv || !argv.source || !argv.dest) {
         throw('Source and destination arguments required.');
@@ -415,9 +448,9 @@ module.exports = function(options) {
                     writeItemsFile(models, function(err) {
                         showError(err);
                         console.log('Schema writing finished.');
-                    });
+                    }, editorMode);
                 }
-            });
+            }, editorMode);
         });
     });
 
