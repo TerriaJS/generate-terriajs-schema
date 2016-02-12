@@ -8,6 +8,8 @@ var yargs = require('yargs')
     .default('dest', './schema')
     .describe('quiet', 'Suppress non-error output.')
     .boolean('quiet')
+    .describe('editor', 'Generates JSON-editor friendly version of schema.')
+    .boolean('editor')
     .describe('noversionsubdir', 'Don\'t add TerriaJS version as subdirectory.')
     .boolean('noversionsubdir')
     .help('help');

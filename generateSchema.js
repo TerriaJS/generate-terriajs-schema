@@ -6,6 +6,13 @@ var esprima = require('esprima'),
 
 var argv;
 
+function fatalError(message, e) {
+    console.error('*** ' + message);
+    e && console.error(e);
+    console.error('Aborting.\n');
+    process.exit(1);
+}
+
 function defined(x) {
     return x !== undefined;
 }
@@ -232,8 +239,36 @@ function specialProps(propName, p, className) {
     return p;
 }
 
-function processText(model, comments, editorMode) {
-    var className = comments.filter(eq('kind', 'class'))[0].name;
+function makeShellFile(model, mainOut) {
+    var out = {
+        type: 'object',
+        properties: {
+            type: {
+                options: { hidden: true },
+                type: 'string',
+                enum: [ model.typeId ]
+            }
+
+        },
+        description: mainOut.description,
+        title: mainOut.title,
+               // it seems redundant to include the ancestors again here, but it's needed for the editor to function.
+        allOf: mainOut.allOf.concat({ $ref: model.name + '.json' } )
+    };
+    if (model.name === 'CatalogGroup') {
+        // we're cheating a bit here.
+        out.properties.items =  { "$ref": "items.json" };
+    }    
+    return out;
+}
+/**
+ * Turns JSDoc comments attached to a catalog item model into schema properties.
+ * @param  {Object} model    [description]
+ * @param  {Object[]} comments [description]
+ */
+function processText(model, comments) {
+    var className, cls = comments.filter(eq('kind', 'class'))[0];
+    if (cls) { className = cls.name; } else { fatalError('No @class comment in ' + model.name); }
 
     /*** Generate JSON schema for the class-level parameters ***/
     var out = {
@@ -259,8 +294,12 @@ function processText(model, comments, editorMode) {
     } else {
         out.title = 'CatalogMember';
     }
-
-    var props = getClassProps(comments, className, model.inheritsLine);
+    var props;
+    try {
+        props = getClassProps(comments, className, model.inheritsLine);
+    } catch (e) {
+        fatalError("Error getting class properties for class " + className, e);
+    }
 
     /*** Generate JSON schema for each of the class properties. ***/
     props.forEach(function(x) {
@@ -289,22 +328,16 @@ function processText(model, comments, editorMode) {
         p = specialProps(x.name, p, className);
         out.properties[x.name] = p;
     });
-    // This is fundamental to how the editor works. It's a bit of JSON-Schema magic that forces the editor to pick the right schema once the user selects a type.
-    if (defined(model.typeId) && model.typeId !== 'group' /* ###Does this only apply in editor mode? */) {
-        out.properties.type = {
-            options: { hidden: true }
-        };
-        if (editorMode) { // otherwise this goes in items.json
-            out.properties.type.type = 'string'; // not strictly required
-            out.properties.type.enum =  [ model.typeId ]; 
-        }
-    }
-
     delete (out.properties.typeName);
-    
+
     !argv.quiet && console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
     model.outFile = argv.dest + '/' + model.name + '.json';
-    fs.writeFile(model.outFile, JSON.stringify(out, null, argv.jsonIndent), 'utf8', showError);
+    if (model.typeId) {
+        writeJson(argv.dest + '/' + model.name + '_type.json', makeShellFile(model, out), showError);
+    }
+    model.description=undefined; //###testing
+    model.title=undefined;
+    writeJson(model.outFile, out, showError);
 }
 
 function showError(err) {
@@ -314,9 +347,12 @@ function showError(err) {
     console.error(JSON.stringify(err));
 }
 
-// Write out the special 'items' schema that says that each item in group can be any of the item types
-// that we've processed today.
-function writeItemsFile(models, callback, editorMode) {
+// Generate the contents of the special 'items' schema that says that each item in group can be any of the item types
+// that we've processed today. Two very different formats depending on what 'editorMode' is set to.
+function makeItemsFile(models, editorMode) {
+    function sortModels(a, b) {
+        return (a.$ref === 'CatalogGroup_type.json' ? -1 : 1);
+    }
     function modelToItem(m) {
         
         // This seems convoluted, because it is. The logic is this:
@@ -332,18 +368,17 @@ function writeItemsFile(models, callback, editorMode) {
         };
         if (!editorMode) return {
             oneOf: [
-                {
-                    not: { properties: typeProp }
+                { not: { properties: typeProp }
                 },
                 { allOf: [ 
                     // we have to put the type here (and not in the relevant schema file) in order to handle catalog types
                     // that inherit from other types. Eg, abs-itt inherits from csv, but a type field can't be both csv and abs-itt.
                     { properties: typeProp }, 
-                    { $ref: m.name + '.json' } 
+                    { $ref: m.name + '_type.json' } 
                 ] }
             ]
         }; else 
-            return { $ref: m.name + '.json' };
+            return { $ref: m.name + '_type.json' };
     }
     itemsOut = {
         title: 'Items',
@@ -358,14 +393,24 @@ function writeItemsFile(models, callback, editorMode) {
         }
     };
     if (editorMode) {
+        // for the editor, we construct "oneOf" choices
         itemsOut.items.allOf = [{ $ref: 'CatalogMember.json' }];
-        itemsOut.items.oneOf = [modelToItem({name: 'JustCatalogGroup', typeId: 'group'})].concat(models.map(modelToItem));
+        itemsOut.items.oneOf = models.map(function(m) { return { $ref: m.name + '_type.json' }; })
+            .sort(sortModels);
     } else {
-        itemsOut.items.allOf = [ { $ref: 'CatalogMember.json' }, modelToItem({name: 'JustCatalogGroup', typeId: 'group'})].concat(models.map(modelToItem));
+        // for validation, we use an overall "allOf" list, with pairs of allOf/not in binary opposition, to give most useful feedback.
+        itemsOut.items.allOf = [ { $ref: 'CatalogMember.json' }].concat(models.map(modelToItem));
     }
-    fs.writeFile(argv.dest + '/items.json', JSON.stringify(itemsOut, null, argv.jsonIndent), 'utf8', callback);
+    return itemsOut;
 }
 
+/**
+ * Scan the code for a catalog item type and return a useful chunk of processed data.
+ * @param  {Object}   model      Object with a filename property
+ * @param  {Function} callback 
+ * @param  {Boolean}  editorMode
+ * @return {Object}   model
+ */
 function processModel(model, callback, editorMode) {
     fs.readFile(model.filename, 'utf8', function(err, data ){
         model.source = esprima.parse(data); // 1. Parse with esprima
@@ -387,8 +432,13 @@ function processModel(model, callback, editorMode) {
             });
 
             doc.on('end', function() { 
-                processText(model, JSON.parse(model.allText), editorMode); 
-                callback(undefined, model);
+                try {
+                    processText(model, JSON.parse(model.allText)); 
+                    callback(undefined, model);
+                } catch (e) {
+                    fatalError('Error processing ' + model.filename, e);
+                }
+
             });
         } catch (e) {
             callback(e, model);
@@ -412,16 +462,22 @@ function makeDir(dir) {
     }
 }
 
+function writeJson(filename, json, callback) {
+    return fs.writeFile(filename, JSON.stringify(json, null, argv.jsonIndent), 'utf8', callback);
+}
 
 /**
  * Generate schema and write to files.
  * @param  {Object} options Yargs-style object, including
  * * source: source directory
  * * dest: target directory
- * @return {[type]}         [description]
+ * @return {[type]}         
  */
 module.exports = function(options) {
-    editorMode=true;
+    function err(e) {
+        showError(e);
+        console.log('Schema writing finished.');        
+    }
     argv = options;
     if (!argv || !argv.source || !argv.dest) {
         throw('Source and destination arguments required.');
@@ -432,7 +488,7 @@ module.exports = function(options) {
         var processedModels = 0;
         files.filter(function(f) { 
             return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
-                  !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);  // a deprecated shim
+                  !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
         }).forEach(function(f, i, arr) {
             processModel({
                 name: f.replace(/\.js$/, ''),
@@ -441,16 +497,13 @@ module.exports = function(options) {
                 if (err) {
                     console.error('Fail: ' + model.filename);
                     console.error(err);
-                } else if (defined(model.typeId) && model.typeId !== 'group') {
+                } else if (defined(model.typeId)) {
                     models.push(model);
                 }
                 if (++processedModels === arr.length) {
-                    writeItemsFile(models, function(err) {
-                        showError(err);
-                        console.log('Schema writing finished.');
-                    }, editorMode);
+                    writeJson(argv.dest + '/items.json', makeItemsFile(models, options.editor), err);
                 }
-            }, editorMode);
+            }, options.editor);
         });
     });
 
