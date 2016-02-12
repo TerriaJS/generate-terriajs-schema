@@ -239,6 +239,14 @@ function specialProps(propName, p, className) {
     return p;
 }
 
+function replaceLinks(comment) {
+    if (!defined(comment)) {
+        return undefined;
+    }
+    return comment.replace(/\{@link ([^|}#]+)#([^}]*)\}/ig, "$1's $2")
+        .replace(/\{@link ([^|}]+\|)?([^}]+)\}/ig, '$2');
+}
+
 function makeShellFile(model, mainOut, className, comments) {
     var out = {
         type: 'object',
@@ -250,7 +258,7 @@ function makeShellFile(model, mainOut, className, comments) {
             }
 
         },
-        description: findClassProp(comments, className, 'editordescription', 'description'),
+        description: replaceLinks(findClassProp(comments, className, 'editordescription', 'description')),
         title: defaultValue(findClassProp(comments, className, 'editortitle'), model.typeName, className.replace(/Catalog(?!Member).*/, '')),
         // it seems redundant to include the ancestors again here, but it's needed for the editor to function.
         allOf: mainOut.allOf.concat({ $ref: model.name + '.json' } )
@@ -302,10 +310,10 @@ function processText(model, comments) {
         var p = {
             type: unarray(x.type.filter(supportedType).map(editorType)),
             title: getTag(x, 'editortitle', titleify(x.name)),
-            description: getTag(x, 'editordescription', x.description
+            description: replaceLinks(getTag(x, 'editordescription', x.description
                 .replace(/^Gets or sets the/, 'The')
                 .replace(/^Gets or sets a/, 'A')
-                .replace(/\s*This property is observable./,''))
+                .replace(/\s*This property is observable./,'')))
         };
         if (p.type === 'array') {
             p.format = 'tabs';
