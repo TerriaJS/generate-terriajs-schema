@@ -1,17 +1,15 @@
-/*jshint -W030 */
+"use strict";
+/*jshint -W030, node: true, esnext:true */
+
 var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse'),
-    path = require('path');
+    path = require('path'),
+    when = require('when'),
+    node = require('when/node'),
+    fsp = node.liftAll(require('fs')); // promisified version of fs
 
 var argv;
-
-function fatalError(message, e) {
-    console.error('*** ' + message);
-    e && console.error(e);
-    console.error('Aborting.\n');
-    process.exit(1);
-}
 
 function defined(x) {
     return x !== undefined;
@@ -52,11 +50,6 @@ function titleify(propName) {
             return word;
         }
     }).join(' ');
-}
-
-// return an esprima parse tree from a file.
-function parseCode(filename) {
-    return esprima.parse(fs.readFileSync(filename, 'utf8'));
 }
 
 // allows x.filter(eq('a.b.c', 3))
@@ -190,7 +183,7 @@ function getClassProps(comments, className, inheritsLine) {
             x.type = fromEditorTypes(getTag(x, 'editortype'));
         }
         return x;
-    },this).filter(function(x) {
+    }).filter(function(x) {
         // assume any defined editortype is safe.
         return getTag(x, 'editortype', x.type.some(supportedType));
     });
@@ -199,7 +192,7 @@ function getClassProps(comments, className, inheritsLine) {
 function unarray(arr) {
     return arr.length === 1 ? arr[0] : arr;
 }
-
+/* Add special attributes if a property name is special. */
 function specialProps(propName, p, className) {
     function clone(o) {
         return JSON.parse(JSON.stringify(o));
@@ -276,7 +269,7 @@ function makeShellFile(model, mainOut, className, comments) {
  */
 function processText(model, comments) {
     var className, cls = comments.filter(eq('kind', 'class'))[0];
-    if (cls) { className = cls.name; } else { fatalError('No @class comment in ' + model.name); }
+    if (cls) { className = cls.name; } else throw 'No @class comment in ' + model.name;
 
     /*** Generate JSON schema for the class-level parameters ***/
     var out = {
@@ -302,7 +295,7 @@ function processText(model, comments) {
     try {
         props = getClassProps(comments, className, model.inheritsLine);
     } catch (e) {
-        fatalError("Error getting class properties for class " + className, e);
+        throw Error("Error getting class properties for class " + className + ": " + e.message);
     }
 
     /*** Generate JSON schema for each of the class properties. ***/
@@ -334,14 +327,15 @@ function processText(model, comments) {
     });
     delete (out.properties.typeName);
 
-    !argv.quiet && console.log(model.name + Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
+    !argv.quiet && console.log(model.name + new Array(32 - model.name.length).join(' ') +  Object.keys(out.properties).join(' '));
     model.outFile = argv.dest + '/' + model.name + '.json';
     if (model.typeId) {
-        writeJson(argv.dest + '/' + model.name + '_type.json', makeShellFile(model, out, className, comments), showError);
+        writeJson(argv.dest + '/' + model.name + '_type.json', makeShellFile(model, out, className, comments))
+        .catch(showError);
     }
     model.description=undefined; //###testing
     model.title=undefined;
-    writeJson(model.outFile, out, showError);
+    writeJson(model.outFile, out).catch(showError);
 }
 
 function showError(err) {
@@ -352,8 +346,8 @@ function showError(err) {
 }
 
 // Generate the contents of the special 'items' schema that says that each item in group can be any of the item types
-// that we've processed today. Two very different formats depending on what 'editorMode' is set to.
-function makeItemsFile(models, editorMode) {
+// that we've processed today. Two very different formats depending on what 'argv.editor' is set to.
+function makeItemsFile(models) {
     function sortModels(a, b) {
         return (a.$ref === 'CatalogGroup_type.json' ? -1 : 1);
     }
@@ -365,12 +359,12 @@ function makeItemsFile(models, editorMode) {
         //   - b) has the type string, and meet all the other requirements
         // We do it this way so that if an object fails part a), then any failure in part b) can instantly be flagged
         // as a genuine validation failure and alerted with useful context.
-        typeProp = { 
+        var typeProp = { 
             type: {
                 enum: [ m.typeId ]
             }
         };
-        if (!editorMode) return {
+        if (!argv.editor) return {
             oneOf: [
                 { not: { properties: typeProp }
                 },
@@ -384,7 +378,7 @@ function makeItemsFile(models, editorMode) {
         }; else 
             return { $ref: m.name + '_type.json' };
     }
-    itemsOut = {
+    var itemsOut = {
         title: 'Items',
         description: 'List of items or groups',
         type: 'array',
@@ -396,7 +390,7 @@ function makeItemsFile(models, editorMode) {
             required: [ 'name', 'type' ]
         }
     };
-    if (editorMode) {
+    if (argv.editor) {
         // for the editor, we construct "oneOf" choices
         itemsOut.items.allOf = [{ $ref: 'CatalogMember.json' }];
         itemsOut.items.oneOf = models.map(function(m) { return { $ref: m.name + '_type.json' }; })
@@ -411,12 +405,14 @@ function makeItemsFile(models, editorMode) {
 /**
  * Scan the code for a catalog item type and return a useful chunk of processed data.
  * @param  {Object}   model      Object with a filename property
- * @param  {Function} callback 
- * @param  {Boolean}  editorMode
  * @return {Object}   model
  */
-function processModel(model, callback, editorMode) {
-    fs.readFile(model.filename, 'utf8', function(err, data ){
+var processModelFile = node.lift(function(filename, i, callback) {
+    var model = {
+        name: filename.replace(/\.js$/, ''),
+        filename: argv.source + '/lib/Models/' + filename
+    };
+    return fsp.readFile(model.filename, 'utf8').then(function(data) {
         model.source = esprima.parse(data); // 1. Parse with esprima
         model.typeId = getTypeProp(model.source, 'type'); 
         if (!defined(model.typeId)) {
@@ -424,45 +420,66 @@ function processModel(model, callback, editorMode) {
             // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
             !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
         }
-        try {
-            var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
-            m = findInherits(data, model.filename); // 3. simple text scan
-            model.inheritsLine = m.line;
-            model.parent = m.parent; 
-            model.allText = '';
-            model.typeName = getTypeProp(model.source, 'typeName');
-            doc.on('data', function(chunk) {
-                model.allText += chunk;
-            });
+        var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
+        var m = findInherits(data, model.filename); // 3. simple text scan
+        model.inheritsLine = m.line;
+        model.parent = m.parent; 
+        model.allText = '';
+        model.typeName = getTypeProp(model.source, 'typeName');
+        doc.on('data', function(chunk) {
+            model.allText += chunk;
+        });
 
-            doc.on('end', function() { 
-                try {
-                    processText(model, JSON.parse(model.allText)); 
-                    callback(undefined, model);
-                } catch (e) {
-                    fatalError('Error processing ' + model.filename, e);
-                }
+        doc.on('end', function() { 
+            try {
+                processText(model, JSON.parse(model.allText)); 
+                callback(undefined, model);
+            } catch (e) {
+                console.error('Error processing ' + model.filename + ': ' + e.message);
+                callback(e);
+            }
+        });
+    });
+});
 
-            });
-        } catch (e) {
-            callback(e, model);
-        }        
+function makeDir(dir) {
+    return fsp.mkdir(dir).catch(function(e) {
+        if (e.code === 'EEXIST') {
+            return;
+        } else if (e.code === 'ENOENT') {
+            throw('Parent directory missing, so unable to create ' + dir);
+        }
     });
 }
 
-function makeDir(dir) {
-    try {
-        fs.mkdirSync(dir);
-    } catch (e) {
-        if (e.code === 'EEXIST') {
-            return;
-        }
-        fatalError(e.code === 'ENOENT' ? 'Parent directory missing, so unable to create ' + dir : e.message, e);
-    }
+function writeJson(filename, json) {
+    return fsp.writeFile(filename, JSON.stringify(json, null, argv.jsonIndent), 'utf8');
 }
 
-function writeJson(filename, json, callback) {
-    return fs.writeFile(filename, JSON.stringify(json, null, argv.jsonIndent), 'utf8', callback);
+function isSchemable(modelName) {
+    return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+          !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
+}
+
+function processModels() {
+    function hasTypeId(model) {
+        return model && model.typeId;
+    }
+    return when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), processModelFile)
+    .then(function(models) {
+        writeJson(argv.dest + '/items.json', makeItemsFile(models.filter(hasTypeId)));
+        return models;
+    });
+}
+
+function copyStaticFiles() {
+    return when.map(fsp.readdir(path.join(__dirname, 'src')), function (filename) {
+        return fsp.readFile(path.join(__dirname, 'src', filename), 'utf8').then(function(data) {
+            return fsp.writeFile(path.join(argv.dest, filename), data, 'utf8').then(function() {
+                !argv.quiet && console.log('Copied ' + filename);
+            });
+        });
+    });
 }
 
 /**
@@ -470,54 +487,14 @@ function writeJson(filename, json, callback) {
  * @param  {Object} options Yargs-style object, including
  * * source: source directory
  * * dest: target directory
- * @return {[type]}         
  */
-module.exports = function(options, callback) {
-    function err(e) {
-        showError(e);
-        console.log('Schema writing finished.');        
-    }
+module.exports = function(options) {
     argv = options;
     if (!argv || !argv.source || !argv.dest) {
         throw('Source and destination arguments required.');
     }
-    makeDir(argv.dest);
-    fs.readdir(argv.source + '/lib/Models', function(err, files) {
-        var models=[];
-        var processedModels = 0;
-        files.filter(function(f) { 
-            return f.match(/Catalog(Item|Group|Member)\.js$/) &&                   
-                  !f.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
-        }).forEach(function(f, i, arr) {
-            processModel({
-                name: f.replace(/\.js$/, ''),
-                filename: argv.source + '/lib/Models/' + f
-            }, function(err, model) {
-                if (err) {
-                    console.error('Fail: ' + model.filename);
-                    console.error(err);
-                } else if (defined(model.typeId)) {
-                    models.push(model);
-                }
-                if (++processedModels === arr.length) {
-                    writeJson(argv.dest + '/items.json', makeItemsFile(models, options.editor), err);
-                }
-            }, options.editor);
-        });
-    });
-
-    // copy hardcoded JSON files
-    fs.readdir(path.join(__dirname, 'src'), function(err, files) {
-        files.forEach(function(file) {
-            fs.readFile(path.join(__dirname, 'src', file), 'utf8', function(err, data) {
-                fs.writeFile(path.join(argv.dest, file), data, 'utf8', function(err) {
-                    if (!err) {
-                        !argv.quiet && console.log('Copied ' + file);
-                    } else {
-                        throw(err);
-                    }
-                });
-            });
-        });
-    });
+    return makeDir(argv.dest)
+        .then(processModels)
+        .then(copyStaticFiles)
+        .catch(showError);
 };
