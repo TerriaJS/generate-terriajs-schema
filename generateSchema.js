@@ -457,12 +457,7 @@ function makeDir(dir) {
         if (e.code === 'EEXIST') {
             return;
         }
-        if (e.code === 'ENOENT') {
-            console.error('Parent directory missing, so unable to create ' + dir);
-        } else {
-            console.error(e.message);
-        }
-        process.exit(1);
+        fatalError(e.code === 'ENOENT' ? 'Parent directory missing, so unable to create ' + dir : e.message, e);
     }
 }
 
@@ -477,7 +472,7 @@ function writeJson(filename, json, callback) {
  * * dest: target directory
  * @return {[type]}         
  */
-module.exports = function(options) {
+module.exports = function(options, callback) {
     function err(e) {
         showError(e);
         console.log('Schema writing finished.');        
