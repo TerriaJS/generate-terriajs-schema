@@ -8,6 +8,7 @@ var esprima = require('esprima'),
     when = require('when'),
     node = require('when/node'),
     fsp = node.liftAll(require('fs')); // promisified version of fs
+var specialProperties = require('./specialProperties.json');
 
 var argv;
 
@@ -197,36 +198,9 @@ function specialProps(propName, p, className) {
     function clone(o) {
         return JSON.parse(JSON.stringify(o));
     }
-    var specials = {
-        'rectangle': {
-            type: 'array',
-            items: { 
-                type: [ 'number', 'string' ]
-            },
-            format: 'table',
-            options:  {
-                collapsed: true,
-                disable_array_reorder: true
-            },
-            maxItems: 4,
-            minItems: 2
-        },
-        'blacklist': {
-            additionalProperties: {
-                type: 'boolean',
-                format: 'checkbox'
-            }
-        },
-        'whitelist': {
-            additionalProperties: {
-                type: 'boolean',
-                format: 'checkbox'
-            }
-        }
-    };
-    if (specials[propName]) {
-        Object.keys(specials[propName]).forEach(function(k) {
-            p[k] = clone(specials[propName][k]);
+    if (specialProperties[propName]) {
+        Object.keys(specialProperties[propName]).forEach(function(k) {
+            p[k] = clone(specialProperties[propName][k]);
         });
     }
     return p;

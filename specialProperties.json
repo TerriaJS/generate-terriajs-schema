@@ -1,0 +1,60 @@
+{
+    "rectangle": {
+        "type": "array",
+        "items": {
+            "type": [
+                "number",
+                "string"
+            ]
+        },
+        "format": "table",
+        "options": {
+            "collapsed": true,
+            "disable_array_reorder": true
+        },
+        "maxItems": 4,
+        "minItems": 2
+    },
+    "blacklist": {
+        "additionalProperties": {
+            "type": "boolean",
+            "format": "checkbox"
+        }
+    },
+    "whitelist": {
+        "additionalProperties": {
+            "type": "boolean",
+            "format": "checkbox"
+        }
+    },
+    "info": {
+        "items": {
+            "type": "object",
+            "title": "Info",
+            "headerTemplate": "{{ self.name }}",
+            "defaultProperties": [
+                "name",
+                "content"
+            ],
+            "required": [
+                "name",
+                "content"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "title": "Section name",
+                    "type": "string"
+                },
+                "content": {
+                    "title": "Content",
+                    "type": "string",
+                    "format": "textarea",
+                    "options": {
+                        "expand_height": true
+                    }
+                }
+            }
+        }
+    }
+}
