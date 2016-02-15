@@ -1,5 +1,5 @@
 "use strict";
-/*jshint -W030, node: true, esnext:true */
+/*jshint -W030, node: true */
 
 var esprima = require('esprima'),
     fs = require('fs'),
@@ -314,9 +314,10 @@ function processText(model, comments) {
 
 function showError(err) {
     if (!err) { 
-        return;
+        return false;
     }
     console.error(JSON.stringify(err));
+    return err;
 }
 
 // Generate the contents of the special 'items' schema that says that each item in group can be any of the item types
@@ -430,14 +431,14 @@ function writeJson(filename, json) {
     return fsp.writeFile(filename, JSON.stringify(json, null, argv.jsonIndent), 'utf8');
 }
 
-function isSchemable(modelName) {
-    return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&                   
-          !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
-}
 
 function processModels() {
     function hasTypeId(model) {
         return model && model.typeId;
+    }
+    function isSchemable(modelName) {
+        return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+              !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
     }
     return when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), processModelFile)
     .then(function(models) {
@@ -470,5 +471,6 @@ module.exports = function(options) {
     return makeDir(argv.dest)
         .then(processModels)
         .then(copyStaticFiles)
+        .yield(false)
         .catch(showError);
 };
