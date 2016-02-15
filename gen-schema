@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+console.log('generate-terriajs-schema v' + require('./package.json').version);
 var yargs = require('yargs')
     .usage ('$0 [options] --source <dir> --dest <dir>')
     .describe('source','TerriaJS directory to scan.')

@@ -24,3 +24,17 @@ These property-level tags are supported:
 * `@editoritemstitle` (name of each thing in the array, like `Filter`)
 * `@editoritemsdescription` (description of each thing in the array)
   
+### Command-line usage
+```
+generate-terriajs-schema v1.1.1
+gen-schema [options] --source <dir> --dest <dir>
+
+Options:
+  --source           TerriaJS directory to scan.        [default: "../terriajs"]
+  --minify           Generate minified JSON
+  --dest             Output directory                      [default: "./schema"]
+  --quiet            Suppress non-error output.                        [boolean]
+  --editor           Generates JSON-editor friendly version of schema. [boolean]
+  --noversionsubdir  Don't add TerriaJS version as subdirectory.       [boolean]
+  --help             Show help                                         [boolean]
+```
