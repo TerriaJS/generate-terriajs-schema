@@ -15,16 +15,5 @@ var yargs = require('yargs')
     .boolean('noversionsubdir')
     .help('help');
 var argv = yargs.argv;
-argv.jsonIndent = (argv.minify ? 0 : 2);
-
-if (!argv.noversionsubdir) {
-    try  {
-        argv.dest += '/' + (require((argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json').version);
-        console.log('Writing TerriaJS schema to: ' + argv.dest);
-    } catch (e) {
-        console.error("Couldn't access TerriaJS at " + argv.source + ". (" + e.message + ")");
-        process.exit(1);
-    }
-}
 
 require('./generateSchema')(argv);

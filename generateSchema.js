@@ -468,6 +468,19 @@ module.exports = function(options) {
     if (!argv || !argv.source || !argv.dest) {
         throw('Source and destination arguments required.');
     }
+    argv.jsonIndent = (argv.minify ? 0 : 2);
+
+    if (!argv.noversionsubdir) {
+        try  {
+            var terriajsPackage = (argv.source.match(/^[.\/]/) ? '' : './') + argv.source + '/package.json';
+            argv.dest = path.join(argv.dest, JSON.parse(fs.readFileSync(terriajsPackage, 'utf8')).version);
+            argv.quiet || console.log('Writing TerriaJS schema to: ' + argv.dest);
+        } catch (e) {
+            console.error("Couldn't access TerriaJS at " + argv.source + ". (" + e.message + ")");
+            process.exit(1);
+        }
+    }
+
     return makeDir(argv.dest)
         .then(processModels)
         .then(copyStaticFiles)
