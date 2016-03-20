@@ -1,6 +1,10 @@
 "use strict";
 /*jshint -W030, node: true */
 
+var generateFromTypeScript = require('./lib/generateFromTypeScript');
+
+console.log(generateFromTypeScript);
+
 var esprima = require('esprima'),
     fs = require('fs'),
     jsdoc = require('jsdoc-parse'),
@@ -384,36 +388,65 @@ function makeItemsFile(models) {
  */
 var processModelFile = node.lift(function(filename, i, callback) {
     var model = {
-        name: filename.replace(/\.js$/, ''),
+        name: filename.replace(/\.[jt]s$/, ''),
         filename: argv.source + '/lib/Models/' + filename
     };
     return fsp.readFile(model.filename, 'utf8').then(function(data) {
-        model.source = esprima.parse(data); // 1. Parse with esprima
-        model.typeId = getTypeProp(model.source, 'type'); 
-        if (!defined(model.typeId)) {
-            // strip out any model that doesn't have a concrete static .type.
-            // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
-            !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
-        }
-        var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
-        var m = findInherits(data, model.filename); // 3. simple text scan
-        model.inheritsLine = m.line;
-        model.parent = m.parent; 
-        model.allText = '';
-        model.typeName = getTypeProp(model.source, 'typeName');
-        doc.on('data', function(chunk) {
-            model.allText += chunk;
-        });
-
-        doc.on('end', function() { 
-            try {
-                processText(model, JSON.parse(model.allText)); 
-                callback(undefined, model);
-            } catch (e) {
-                console.error('Error processing ' + model.filename + ': ' + e.message);
-                callback(e);
+        if (filename.match(/\.ts$/)) {
+            model.source = generateFromTypeScript.parse(data); // 1. Parse with esprima
+            model.typeId = generateFromTypeScript.getTypeProp(model.source, 'type'); 
+            if (!defined(model.typeId)) {
+                // strip out any model that doesn't have a concrete static .type.
+                // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
+                !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
             }
-        });
+            // var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
+            // var m = findInherits(data, model.filename); // 3. simple text scan
+            // model.inheritsLine = m.line;
+            // model.parent = m.parent; 
+            // model.allText = '';
+            model.typeName = generateFromTypeScript.getTypeProp(model.source, 'typeName');
+            // doc.on('data', function(chunk) {
+            //     model.allText += chunk;
+            // });
+
+            // doc.on('end', function() { 
+                try {
+                    processText(model, JSON.parse(model.allText)); 
+                    callback(undefined, model);
+                } catch (e) {
+                    console.error('Error processing ' + model.filename + ': ' + e.message);
+                    callback(e);
+                }
+            // });
+        } else {
+            model.source = esprima.parse(data); // 1. Parse with esprima
+            model.typeId = getTypeProp(model.source, 'type'); 
+            if (!defined(model.typeId)) {
+                // strip out any model that doesn't have a concrete static .type.
+                // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
+                !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
+            }
+            var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
+            var m = findInherits(data, model.filename); // 3. simple text scan
+            model.inheritsLine = m.line;
+            model.parent = m.parent; 
+            model.allText = '';
+            model.typeName = getTypeProp(model.source, 'typeName');
+            doc.on('data', function(chunk) {
+                model.allText += chunk;
+            });
+
+            doc.on('end', function() { 
+                try {
+                    processText(model, JSON.parse(model.allText)); 
+                    callback(undefined, model);
+                } catch (e) {
+                    console.error('Error processing ' + model.filename + ': ' + e.message);
+                    callback(e);
+                }
+            });
+        }
     });
 });
 
@@ -437,7 +470,7 @@ function processModels() {
         return model && model.typeId;
     }
     function isSchemable(modelName) {
-        return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+        return modelName.match(/Catalog(Item|Group|Member)\.[jt]s$/) &&                   
               !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
     }
     return when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), processModelFile)

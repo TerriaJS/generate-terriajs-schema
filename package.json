@@ -7,6 +7,7 @@
   "dependencies": {
     "esprima": "^2.7.1",
     "jsdoc-parse": "^1.2.6",
+    "typescript": "^1.8.9",
     "when": "^3.7.7",
     "yargs": "^3.32.0"
   },
