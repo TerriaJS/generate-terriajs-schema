@@ -92,22 +92,43 @@ generateDocumentation(process.argv.slice(2), {
     target: ts.ScriptTarget.ES5, module: ts.ModuleKind.CommonJS
 });
 
-export function parse(sourceCode: string) {
-    return ts.createSourceFile('foo.ts', sourceCode, ts.ScriptTarget.ES2015);
+export function parse(filename: string, sourceCode: string) {
+    const source = ts.createSourceFile(filename, sourceCode, ts.ScriptTarget.ES2015);
+    const classes = findNodesOfKind(source, ts.SyntaxKind.ClassDeclaration);
+
+    if (classes.length === 0) {
+        console.log(filename + ' has no classes!');
+    } else if (classes.length > 1) {
+        console.log(filename + ' has ' + classes.length + ' classes.  Only the first will be used.');
+    }
+    
+    return classes[0];
 }
 
-export function getTypeProp(source, propertyName) {
-    ts.forEachChild(source, visit);
+export function getTypeProp(source: ts.ClassDeclaration, propertyName: string) {
+    const properties = findNodesOfKind(source, ts.SyntaxKind.PropertyDeclaration);
+
+    for (var i = 0; i < properties.length; ++i) {
+        const property = <ts.PropertyDeclaration>properties[i];
+        if (property.name.kind === ts.SyntaxKind.Identifier) {
+            const propertyIdentifier = <ts.Identifier>property.name;
+            console.log(propertyIdentifier.text);
+        }
+    }
+}
+
+function findNodesOfKind(node: ts.Node, kind: ts.SyntaxKind) {
+    const result = [];
+
+    ts.forEachChild(node, visit);
 
     function visit(node: ts.Node) {
-        if (node.kind === ts.SyntaxKind.PropertyDeclaration) {
-            const property = <ts.PropertyDeclaration>node;
-            if (property.name.kind === ts.SyntaxKind.Identifier) {
-                const propertyIdentifier = <ts.Identifier>property.name;
-                console.log(propertyIdentifier.text);
-            }
+        if (node.kind === kind) {
+            result.push(node);
         } else {
             ts.forEachChild(node, visit);
         }
     }
+
+    return result;
 }

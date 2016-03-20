@@ -393,7 +393,7 @@ var processModelFile = node.lift(function(filename, i, callback) {
     };
     return fsp.readFile(model.filename, 'utf8').then(function(data) {
         if (filename.match(/\.ts$/)) {
-            model.source = generateFromTypeScript.parse(data); // 1. Parse with esprima
+            model.source = generateFromTypeScript.parse(model.filename, data); // 1. Parse with esprima
             model.typeId = generateFromTypeScript.getTypeProp(model.source, 'type'); 
             if (!defined(model.typeId)) {
                 // strip out any model that doesn't have a concrete static .type.
