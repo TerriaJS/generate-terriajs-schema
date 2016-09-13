@@ -6,6 +6,7 @@
   "repository": "https://github.com/TerriaJS/generate-terriajs-schema",
   "dependencies": {
     "esprima": "^2.7.1",
+    "glob-all": "^3.0.1",
     "jsdoc-parse": "^1.2.6",
     "when": "^3.7.7",
     "yargs": "^3.32.0"
