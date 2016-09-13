@@ -7,7 +7,8 @@ var esprima = require('esprima'),
     path = require('path'),
     when = require('when'),
     node = require('when/node'),
-    fsp = node.liftAll(require('fs')); // promisified version of fs
+    fsp = node.liftAll(require('fs')),
+    glob = require('glob-all'); // promisified version of fs
 var specialProperties = require('./specialProperties.json');
 
 var argv;
@@ -21,7 +22,7 @@ function defaultValue(x, y, z) {
         return x;
     } else if (defined(y)) {
         return y;
-    } else 
+    } else
     return z;
 }
 
@@ -54,7 +55,7 @@ function titleify(propName) {
 }
 
 // allows x.filter(eq('a.b.c', 3))
-function eq(field, value) { 
+function eq(field, value) {
     return function(x) {
         var parts = field.split('.');
         while (parts.length > 1 && defined(x)) {
@@ -152,7 +153,7 @@ function findInherits(fulltext, filename) {
     for (var i = 0; i < lines.length; i++) {
         // hmm, some inherit from ImageryLayerCatalogItem...
         var m = lines[i].match(searchRE);
-        if (m) { 
+        if (m) {
             return { line: i, parent: m[1] };
         }
     }
@@ -172,9 +173,9 @@ function findClassProp(comments, className, customTag, fallbackProp) {
 
 // Get relevant properties on our class
 function getClassProps(comments, className, inheritsLine) {
-    return comments.filter(function(x) { 
+    return comments.filter(function(x) {
         // we only want props defined directly on the object, not in defineProperties etc. Maybe.
-        return x.kind === 'member' && x.memberof === className && x.meta.lineno < inheritsLine; 
+        return x.kind === 'member' && x.memberof === className && x.meta.lineno < inheritsLine;
     }).map(function(x) {
         x.type =  defined(x.type) ? x.type.names : [];
         if (x.type[0] === 'Rectangle') { // Yes, handling Rectangle is pretty messy.
@@ -233,7 +234,7 @@ function makeShellFile(model, mainOut, className, comments) {
     if (model.name === 'CatalogGroup') {
         // we're cheating a bit here.
         out.properties.items =  { "$ref": "items.json" };
-    }    
+    }
     return out;
 }
 /**
@@ -253,7 +254,7 @@ function processText(model, comments) {
         ],
         properties: {}
     };
-    if (model.name !== 'CatalogMember') { 
+    if (model.name !== 'CatalogMember') {
         out.allOf = [];
         if (model.name.match(/.CatalogItem$/)) {
             out.allOf.push({ $ref: 'CatalogItem.json' });
@@ -313,7 +314,7 @@ function processText(model, comments) {
 }
 
 function showError(err) {
-    if (!err) { 
+    if (!err) {
         return false;
     }
     console.error(JSON.stringify(err));
@@ -327,14 +328,14 @@ function makeItemsFile(models) {
         return (a.$ref === 'CatalogGroup_type.json' ? -1 : 1);
     }
     function modelToItem(m) {
-        
+
         // This seems convoluted, because it is. The logic is this:
         // Every item, for every catalog type, either:
         //   - a) does not have the type string; or
         //   - b) has the type string, and meet all the other requirements
         // We do it this way so that if an object fails part a), then any failure in part b) can instantly be flagged
         // as a genuine validation failure and alerted with useful context.
-        var typeProp = { 
+        var typeProp = {
             type: {
                 enum: [ m.typeId ]
             }
@@ -343,14 +344,14 @@ function makeItemsFile(models) {
             oneOf: [
                 { not: { properties: typeProp }
                 },
-                { allOf: [ 
+                { allOf: [
                     // we have to put the type here (and not in the relevant schema file) in order to handle catalog types
                     // that inherit from other types. Eg, abs-itt inherits from csv, but a type field can't be both csv and abs-itt.
-                    { properties: typeProp }, 
-                    { $ref: m.name + '_type.json' } 
+                    { properties: typeProp },
+                    { $ref: m.name + '_type.json' }
                 ] }
             ]
-        }; else 
+        }; else
             return { $ref: m.name + '_type.json' };
     }
     var itemsOut = {
@@ -384,12 +385,12 @@ function makeItemsFile(models) {
  */
 var processModelFile = node.lift(function(filename, i, callback) {
     var model = {
-        name: filename.replace(/\.js$/, ''),
-        filename: argv.source + '/lib/Models/' + filename
+        name: path.basename(filename, '.js'),
+        filename: filename,
     };
     return fsp.readFile(model.filename, 'utf8').then(function(data) {
         model.source = esprima.parse(data); // 1. Parse with esprima
-        model.typeId = getTypeProp(model.source, 'type'); 
+        model.typeId = getTypeProp(model.source, 'type');
         if (!defined(model.typeId)) {
             // strip out any model that doesn't have a concrete static .type.
             // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
@@ -398,16 +399,17 @@ var processModelFile = node.lift(function(filename, i, callback) {
         var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
         var m = findInherits(data, model.filename); // 3. simple text scan
         model.inheritsLine = m.line;
-        model.parent = m.parent; 
+        model.parent = m.parent;
         model.allText = '';
         model.typeName = getTypeProp(model.source, 'typeName');
         doc.on('data', function(chunk) {
             model.allText += chunk;
         });
 
-        doc.on('end', function() { 
+        doc.on('end', function() {
             try {
-                processText(model, JSON.parse(model.allText)); 
+                console.log('done ' + filename);
+                processText(model, JSON.parse(model.allText));
                 callback(undefined, model);
             } catch (e) {
                 console.error('Error processing ' + model.filename + ': ' + e.message);
@@ -437,14 +439,25 @@ function processModels() {
         return model && model.typeId;
     }
     function isSchemable(modelName) {
-        return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&                   
+        return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&
               !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
     }
-    return when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), processModelFile)
-    .then(function(models) {
-        writeJson(argv.dest + '/items.json', makeItemsFile(models.filter(hasTypeId)));
-        return models;
-    });
+
+    var modelFiles;
+    if (argv.sourceGlob) {
+        modelFiles = glob.sync(argv.sourceGlob);
+        console.log(modelFiles);
+    } else {
+        modelFiles = when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), function(name) {
+            return argv.source + '/lib/Models/' + name;
+        });
+    }
+
+    return when.map(modelFiles, processModelFile).then(function(models) {
+            writeJson(argv.dest + '/items.json', makeItemsFile(models.filter(hasTypeId)));
+            return models;
+        });
+
 }
 
 function copyStaticFiles() {
@@ -465,7 +478,7 @@ function copyStaticFiles() {
  */
 module.exports = function(options) {
     argv = options;
-    if (!argv || !argv.source || !argv.dest) {
+    if (!argv || (!argv.source && !argv.sourceGlob) || !argv.dest) {
         throw('Source and destination arguments required.');
     }
     argv.jsonIndent = (argv.minify ? 0 : 2);
