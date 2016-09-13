@@ -408,7 +408,6 @@ var processModelFile = node.lift(function(filename, i, callback) {
 
         doc.on('end', function() {
             try {
-                console.log('done ' + filename);
                 processText(model, JSON.parse(model.allText));
                 callback(undefined, model);
             } catch (e) {
@@ -446,7 +445,6 @@ function processModels() {
     var modelFiles;
     if (argv.sourceGlob) {
         modelFiles = glob.sync(argv.sourceGlob);
-        console.log(modelFiles);
     } else {
         modelFiles = when.map(when.filter(fsp.readdir(argv.source + '/lib/Models'), isSchemable), function(name) {
             return argv.source + '/lib/Models/' + name;
