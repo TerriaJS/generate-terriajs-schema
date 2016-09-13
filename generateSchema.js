@@ -7,8 +7,8 @@ var esprima = require('esprima'),
     path = require('path'),
     when = require('when'),
     node = require('when/node'),
-    fsp = node.liftAll(require('fs')),
-    glob = require('glob-all'); // promisified version of fs
+    fsp = node.liftAll(require('fs')), // promisified version of fs
+    glob = require('glob-all');
 var specialProperties = require('./specialProperties.json');
 
 var argv;
