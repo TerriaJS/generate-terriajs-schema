@@ -260,8 +260,10 @@ function processText(model, comments) {
             out.allOf.push({ $ref: 'CatalogItem.json' });
         } else if (model.name.match(/.CatalogGroup$/)) {
             out.allOf.push({ $ref: 'CatalogGroup.json' });
+        } else if (model.name.match(/.CatalogFunction$/)) {
+            out.allOf.push({ $ref: 'CatalogFunction.json' });
         }
-        if (!model.parent.match(/^(CatalogItem|CatalogGroup|CatalogMember)$/)) {
+        if (!model.parent.match(/^(CatalogItem|CatalogGroup|CatalogMember|CatalogFunction)$/)) {
             out.allOf.push({ $ref: model.parent + '.json' });
         }
         out.allOf.push({ $ref: 'CatalogMember.json' });
@@ -438,7 +440,7 @@ function processModels() {
         return model && model.typeId;
     }
     function isSchemable(modelName) {
-        return modelName.match(/Catalog(Item|Group|Member)\.js$/) &&
+        return modelName.match(/Catalog(Item|Group|Member|Function)\.js$/) &&
               !modelName.match(/(ArcGisMapServerCatalogGroup|addUserCatalogMember)/);
     }
 
