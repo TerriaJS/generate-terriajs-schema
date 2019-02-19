@@ -3,7 +3,7 @@
 
 var esprima = require('esprima'),
     fs = require('fs'),
-    jsdoc = require('jsdoc-parse'),
+    jsdoc2md = require('jsdoc-to-markdown'),
     path = require('path'),
     when = require('when'),
     node = require('when/node'),
@@ -398,24 +398,21 @@ var processModelFile = node.lift(function(filename, i, callback) {
             // These are (hopefully all) intermediate classes like ImageryLayerCatalogItem
             !argv.quiet && console.log ('(' + model.name + ' has no type ID)');
         }
-        var doc = jsdoc({src: model.filename}); // 2. parse from scratch with JSdoc
+
         var m = findInherits(data, model.filename); // 3. simple text scan
         model.inheritsLine = m.line;
         model.parent = m.parent;
         model.allText = '';
         model.typeName = getTypeProp(model.source, 'typeName');
-        doc.on('data', function(chunk) {
-            model.allText += chunk;
-        });
 
-        doc.on('end', function() {
-            try {
-                processText(model, JSON.parse(model.allText));
-                callback(undefined, model);
-            } catch (e) {
-                console.error('Error processing ' + model.filename + ': ' + e.message);
-                callback(e);
-            }
+        jsdoc2md.getTemplateData({
+            files: model.filename
+        }).then(function(json) {
+            processText(model, json);
+            callback(undefined, model);
+        }).catch(function(e) {
+            console.error('Error processing ' + model.filename + ': ' + e.message);
+            callback(e);
         });
     });
 });

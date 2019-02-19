@@ -7,7 +7,7 @@
   "dependencies": {
     "esprima": "^2.7.1",
     "glob-all": "^3.0.1",
-    "jsdoc-parse": "^1.2.6",
+    "jsdoc-to-markdown": "^4.0.1",
     "when": "^3.7.7",
     "yargs": "^3.32.0"
   },
