@@ -73,7 +73,9 @@ function getTypeProp(source, typeProp) {
 // Yes, we really are going to parse an entire JS file using Esprima, and navigate all the way down the hierarchy just to identify the magic
 // statement that looks like `return 'geojson';`
     try {
-        var r = source.body.filter(eq('expression.callee.name', 'defineProperties'))[0] // inside a defineProperties block
+        var r = source.body.filter(
+            eq('expression.callee.object.name', 'Object') && 
+            eq('expression.callee.property.name', 'defineProperties'))[0] // inside an Object.defineProperties block
             .expression.arguments[1].properties.filter(eq('key.name', typeProp))[0]     // a property of the form '<typeProp>: { ... }'
             .value.properties[0].value.body.body[0].argument.value;                     // ........... return 'thebitwewant';
         return r;
